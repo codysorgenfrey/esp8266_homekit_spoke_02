@@ -108,8 +108,6 @@ void heatpumpStatusChanged(heatpumpStatus status) {
 }
 
 void setup() {
-    sl_printf(SHEETS_URL, "Homkit Spoke " HP_SERIAL, "Rebooting...");
-
 	#if HK_DEBUG > HK_DEBUG_LEVEL_NONE
         Serial.begin(115200);
         while (!Serial) { ; } // wait for serial
@@ -124,6 +122,8 @@ void setup() {
         delay(500);
     }
     HK_INFO_LINE("Connected. IP: %s", WiFi.localIP().toString().c_str());
+
+    sl_printf(SHEETS_URL, "Homkit Spoke " HP_SERIAL, "Rebooting...");
 
     HK_INFO_LINE("Connecting to homek it hub.");
     webSocket.begin(WEBSOCKET_IP, 81);
