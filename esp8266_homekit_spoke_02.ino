@@ -7,6 +7,7 @@
 WebSocketsClient webSocket;
 HeatPump hp;
 unsigned long disconnectedTimer;
+bool commandFromHub = false;
 
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 	switch(type) {
@@ -48,6 +49,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                             hp.update();
                         #endif
                         webSocket.sendTXT("Success");
+                        commandFromHub = true;
                         HK_INFO_LINE("Updated heatpump settings.");
                     }
                 }
@@ -72,7 +74,11 @@ void heatpumpSettingsChanged() {
 
     StaticJsonDocument<192> doc;
     doc["device"] = HP_SERIAL;
-    doc["command"] = "update_settings";
+    if (commandFromHub) {
+        doc["command"] = "update_settings";
+        commandFromHub = false; // clear state
+    } else // from remote control
+        doc["command"] = "replace_settings";
     doc["payload"]["power"] = settings.power;
     doc["payload"]["mode"] = settings.mode;
     doc["payload"]["temperature"] = settings.temperature;
