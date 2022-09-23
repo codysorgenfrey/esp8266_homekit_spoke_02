@@ -32,18 +32,22 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 if (err) HK_ERROR_LINE("Error deserializing message: %s", payload);
                 else {
                     if (
-                        doc['device'].as<String>() == String("hub") && 
-                        doc['command'].as<String>() == String("update_settings")
+                        doc["device"].as<String>() == String(HP_SERIAL) && 
+                        doc["command"].as<String>() == String("update_settings")
                     ) {
-                        heatpumpSettings settings = {
-                            doc["payload"]["power"].as<const char *>(),
-                            doc["payload"]["mode"].as<const char *>(),
-                            doc["payload"]["temperature"].as<float>(),
-                            doc["payload"]["fan"].as<const char *>(),
-                            doc["payload"]["vane"].as<const char *>(),
-                            doc["payload"]["wideVane"].as<const char *>(),
-                        };
-                        hp.setSettings(settings);
+                        #if HP_CONNECTED
+                            heatpumpSettings settings = hp.getSettings();
+                            settings.power = doc["payload"]["power"].as<const char *>();
+                            settings.mode = doc["payload"]["mode"].as<const char *>();
+                            settings.temperature = doc["payload"]["temperature"].as<float>();
+                            settings.fan = doc["payload"]["fan"].as<const char *>(),
+                            settings.vane = doc["payload"]["vane"].as<const char *>();
+                            settings.wideVane = doc["payload"]["wideVane"].as<const char *>();
+
+                            hp.setSettings(settings);
+                            hp.update();
+                        #endif
+                        webSocket.sendTXT("Success");
                         HK_INFO_LINE("Updated heatpump settings.");
                     }
                 }
@@ -104,20 +108,22 @@ void heatpumpStatusChanged(heatpumpStatus status) {
 }
 
 void setup() {
+    sl_printf(SHEETS_URL, "Homkit Spoke " HP_SERIAL, "Rebooting...");
+
 	#if HK_DEBUG > HK_DEBUG_LEVEL_NONE
         Serial.begin(115200);
         while (!Serial) { ; } // wait for serial
+    #else 
+        pinMode(TX_PIN, OUTPUT); 
+        pinMode(RX_PIN, INPUT_PULLUP);
     #endif
-
-    pinMode(TX_PIN, OUTPUT); 
-    pinMode(RX_PIN, INPUT_PULLUP);
 
     HK_INFO_LINE("Connecting to " WIFI_SSID ".");
     WiFi.begin(WIFI_SSID, WIFI_PASS);
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
     }
-    HK_INFO_LINE("Connected. IP: %s", WiFi.localIP());
+    HK_INFO_LINE("Connected. IP: %s", WiFi.localIP().toString().c_str());
 
     HK_INFO_LINE("Connecting to homek it hub.");
     webSocket.begin(WEBSOCKET_IP, 81);
@@ -137,12 +143,14 @@ void setup() {
 
 void loop() {
 	webSocket.loop();
+
     #if HP_CONNECTED
         hp.sync();
     #endif 
 
     if (!webSocket.isConnected()) {
         unsigned long diff = max(millis(), disconnectedTimer) - min(millis(), disconnectedTimer);
+        if (millis() % 5000 == 0) HK_INFO_LINE("Disconnected from hub for %.2f seconds.", diff / 1000.0f);
         if (diff >= MAX_DISCONNECT_TIME) 
             HK_ERROR_LINE("Homekit spoke " HP_SERIAL " cannot connect to hub.");
     }
